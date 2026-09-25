@@ -37,20 +37,69 @@ Kursdaten. Vor jedem ernsthaften Test:
 5. Kommission/Swap im Konto-Profil des Testers hinterlegen, falls dein echter
    Broker welche berechnet — sonst wird die Performance systematisch zu gut.
 
-## 3. Ersten Lauf durchführen
+## 3. Konkrete Einstellungen für einen 2–3-Jahres-Intraday-Backtest
 
-1. `Experten Advisor`: `SMC_XAUUSD_EA` wählen.
-2. `Zeitraum`: mindestens 2–3 Jahre (mehr ist besser, siehe Abschnitt 5).
-3. Chart-Timeframe im Tester auf `InpTimeframe` (Default M15) einstellen —
-   das ist nur die Anzeige, der EA lädt sich seine Daten selbst per
-   `CopyRates`, aber ein passender Chart-TF erleichtert die visuelle Kontrolle.
-4. `Start` klicken. Nach Abschluss: Reiter `Ergebnisse` für die Trade-Liste,
-   Reiter `Grafik` für die Equity-Kurve, Reiter `Bericht` (Rechtsklick →
-   „Bericht speichern") für die vollständigen Statistiken inkl. **Sharpe
-   Ratio**, **Profit Factor**, **Max Drawdown (absolut/relativ)**, **Recovery
+Diese Werte sind auf die M15/H1-Natur der Strategie zugeschnitten. Alles im
+Tester-Fenster (Strg+R), Reiter `Einstellungen`, von oben nach unten:
+
+| Feld | Wert | Warum |
+|---|---|---|
+| Experten Advisor | `SMC_XAUUSD_EA` | — |
+| Symbol | `XAUUSD` (ggf. `XAUUSD.m`/`GOLD` je nach Broker-Namenskonvention — im Market Watch nachsehen) | Namensabweichungen sind broker-spezifisch |
+| Zeitrahmen (Chart-TF im Tester) | `M15` | Muss zu `InpTimeframe` passen; nur Anzeige, aber erleichtert visuelle Kontrolle |
+| Zeitraum | z. B. `2023.01.01` – heute (≈2,75 Jahre) oder `2022.01.01` für volle 3 Jahre | Je nach verfügbarer Tick-Historie deines Brokers (siehe Abschnitt 2, Modellierungsqualität) |
+| Vorwärtstest ("Forward") | Zunächst **Kein** | Für Walk-Forward später gezielt einen Split setzen (siehe Abschnitt 6) |
+| **Modell** | **"Jeder Tick basierend auf echten Kursen"** | Zwingend für diese Strategie: Liquidity Sweeps hängen von echten Intrabar-Wicks ab. "OHLC" oder "Eröffnungskurse" verschlucken genau die Wick-Durchbrüche, die den Sweep triggern, und die Backtest-Statistik wird bedeutungslos |
+| Ausführungsverzögerung ("Delay") | Zufällige Verzögerung, z. B. 30–60 ms (oder Standard belassen) | Simuliert reale Order-Latenz statt sofortiger Perfect-Fill-Ausführung |
+| Einzahlung | z. B. 10 000 (Kontowährung passend zu `InpRiskPercent`) | Realistische Basis für die %-Risiko-Berechnung |
+| Hebel | So wie dein echter Broker für Gold anbietet (oft 1:100, manche 1:20–1:50 speziell für Metalle) | Zu hoher Hebel im Tester verschleiert Margin-Restriktionen, die live greifen würden |
+| Optimierung | **Aus** für den ersten Lauf | Erst Einzellauf, dann gezielt optimieren (Abschnitt 6) |
+
+Zusätzlich, bevor du startest:
+
+1. **Spread fixieren**: Reiter `Einstellungen` → Symbol-Eigenschaften (oder
+   im Tester-Menü „Symbole") → Spread auf einen festen, realistischen Wert
+   setzen (z. B. 25–35 Punkte für Normalzeiten). Bei „Jeder Tick basierend auf
+   echten Kursen" ist der historische Spread zwar oft schon in den Ticks
+   enthalten, aber viele Broker liefern historische Spreads nur lückenhaft —
+   ein fixer, konservativer Wert verhindert eine zu optimistische Statistik.
+2. **Kommission hinterlegen**: Falls dein Broker pro Lot Kommission berechnet
+   (bei Gold-ECN-Konten üblich, oft 3–7 USD pro Lot Round-Turn), im
+   Konto-/Symbolprofil des Testers eintragen — sonst zählt jeder Trade
+   künstlich zu gut.
+3. **Server-Zeitzone prüfen**: Die Session-Inputs (`InpSession1StartHour` etc.)
+   sind Broker-Serverzeit, nicht GMT/lokal. Uhrzeit unten rechts im
+   MT5-Terminal ablesen und mit GMT vergleichen, dann die Session-Stunden im
+   Input-Dialog entsprechend verschieben, damit sie wirklich London-Open
+   (~08–11 Uhr GMT) und London/NY-Overlap (~13–16 Uhr GMT) treffen. Wichtig:
+   viele Broker wechseln zur US-/EU-Sommerzeit unterschiedlich — bei einem
+   mehrjährigen Backtest über DST-Wechsel hinweg kann die Serverzeit-Offset
+   variieren; das ist eine bekannte Ungenauigkeit des Session-Filters, die du
+   in Kauf nehmen musst oder durch großzügigere Fenster (z. B. ±1 Stunde)
+   abfedern kannst.
+4. **Kurzer Sichtcheck vor dem Volllauf**: Einmal mit „Visualisierung"
+   aktiviert über ein paar Wochen laufen lassen, um zu sehen, dass Trades
+   überhaupt in den erwarteten Sessions und mit plausiblen SL/TP ausgelöst
+   werden, bevor du den stillen 2–3-Jahres-Lauf startest.
+
+## 4. Ersten (stillen) Lauf durchführen
+
+1. Mit den Einstellungen aus Abschnitt 3 `Start` klicken (Visualisierung
+   diesmal **aus**, das ist um ein Vielfaches schneller für einen
+   Mehrjahres-Tick-Backtest).
+2. Nach Abschluss: Reiter `Ergebnisse` für die Trade-Liste, Reiter `Grafik`
+   für die Equity-Kurve, Reiter `Bericht` (Rechtsklick → „Bericht
+   speichern") für die vollständigen Statistiken inkl. **Sharpe Ratio**,
+   **Profit Factor**, **Max Drawdown (absolut/relativ)**, **Recovery
    Factor**, **Expected Payoff**.
+3. Erwarte bei einem M15/H1-Intraday-Setup mit den Default-Session-Fenstern
+   über 2–3 Jahre grob 150–400 Trades (stark abhängig von `InpSweepATR_Mult`,
+   `InpConfirmATR_Mult` und wie eng die Session-Fenster sind). Deutlich
+   weniger als ~100 Trades über 2–3 Jahre bedeutet: Statistik ist zu dünn,
+   um Sharpe/PF ernst zu nehmen — Filter lockern oder mehr Sessions
+   aktivieren und erneut laufen lassen.
 
-## 4. Signale visuell verifizieren
+## 5. Signale visuell verifizieren
 
 Bevor du den Zahlen traust: `SMC_Visualizer` auf denselben Chart/Zeitraum
 laden (gleiche Inputs wie im EA verwenden). Er zeichnet mit derselben
@@ -60,7 +109,7 @@ würde, statt der Statistik blind zu vertrauen. Stichproben an 10–15 zufällig
 Signalen manuell prüfen: Ergibt der Sweep visuell Sinn, ist die Order-Block-
 Zone plausibel, wäre der Trade so wirklich ausführbar gewesen?
 
-## 5. Robustheit statt Overfitting: Walk-Forward & Out-of-Sample
+## 6. Robustheit statt Overfitting: Walk-Forward & Out-of-Sample
 
 Ein einzelner optimierter Backtest-Lauf ist fast immer überoptimiert. Vorgehen:
 
@@ -94,7 +143,7 @@ Ein einzelner optimierter Backtest-Lauf ist fast immer überoptimiert. Vorgehen:
    Overfitting-Warnsignal — dann lieber einen Wert aus der Mitte des Plateaus
    wählen statt das absolute Maximum.
 
-## 6. Vor dem Live-/Demo-Einsatz
+## 7. Vor dem Live-/Demo-Einsatz
 
 1. Mindestens 4–8 Wochen **Demo-Forward-Test** parallel zum fortlaufenden
    Marktgeschehen — das ist der einzige Test, der garantiert nicht
@@ -107,7 +156,7 @@ Ein einzelner optimierter Backtest-Lauf ist fast immer überoptimiert. Vorgehen:
    Finanzberatungsprodukt — die Verantwortung für jede Live-Entscheidung liegt
    bei dir.
 
-## 7. Wichtige Inputs im Überblick
+## 8. Wichtige Inputs im Überblick
 
 | Input | Zweck |
 |---|---|
